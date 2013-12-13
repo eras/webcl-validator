@@ -694,7 +694,14 @@ public:
 
     virtual bool rewriteDeclaration(WebCLTransformer &transformer, WebCLKernelHandler &kernelHandler, 
         clang::VarDecl &varDecl) const {
-        return transformer.wrapVariableDeclaration(&varDecl, kernelHandler);
+        clang::QualType type = varDecl.getType();
+        unsigned as = type.getAddressSpace();
+        if (as == 0 || as == clang::LangAS::opencl_constant) {
+            return transformer.wrapVariableDeclaration(&varDecl, kernelHandler);
+        } else {
+            transformer.error(varDecl.getLocStart(), "variables or type sampler_t must be defined in private or constant address space");
+            return true;
+        }
     }
 };
 
