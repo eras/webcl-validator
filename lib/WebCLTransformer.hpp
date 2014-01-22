@@ -278,27 +278,34 @@ public:
     /// Used for implementing function wrappers
     class FunctionCallWrapper;
 
-    enum MacroKind {
-	MACRO_CLAMP,
-	MACRO_CHECK
+    enum CheckKind {
+	CHECK_CLAMP,
+	CHECK_CHECK
     };
     /// \return A macro call that forces the given address to point to
     /// a safe memory area.
     ///
     /// e.g. _WCL_ADDR_global_1(__global int *, addr, _wcl_allocs->gl.array_min, _wcl_allocs->gl.array_max, _wcl_allocs->gn)
-    std::string getCheckMacroCall(MacroKind kind, std::string addr, std::string type, unsigned size, AddressSpaceLimits &limits);
+    std::string getCheckFunctionCall(CheckKind kind, std::string addr, std::string type, unsigned size, AddressSpaceLimits &limits);
 
 private:
 
     /// Caches source code replacements.
     WebCLRewriter wclRewriter_;
   
-    /// Set of all different clamp macro call types in the program. One
-    /// pair for each address space and limit count:
-    /// <address space number, limit count>.
-    typedef std::pair< unsigned, unsigned > ClampMacroKey;
-    typedef std::set<ClampMacroKey> RequiredMacroSet;
-    RequiredMacroSet usedClampMacros_;
+    struct ClampFunctionKey {
+        ClampFunctionKey(unsigned = 0, unsigned = 0, std::string = "");
+
+        bool operator<(const ClampFunctionKey& other) const;
+
+        unsigned    aSpaceNum;
+        unsigned    limitCount;
+        std::string type;
+    };
+
+    /// Set of all different clamp macro call types in the program.
+    typedef std::set<ClampFunctionKey> RequiredFunctionSet;
+    RequiredFunctionSet usedClampFunctions_;
 
     /// Stream for inserting code at the beginning of each kernel or
     /// helper function.
@@ -319,8 +326,8 @@ private:
     /// Stream for code at the start of the module like typedefs and
     /// address space structures.
     std::stringstream modulePrologue_;
-    /// Stream for code after limit macros, eg. for builtin macros
-    std::stringstream afterLimitMacros_;
+    /// Stream for code after limit functions, eg. for builtin functions/macros
+    std::stringstream afterLimitFunctions_;
   
     /// Set to ensure that we aren't initializing relocated parameters
     /// multiple times.
@@ -377,16 +384,16 @@ private:
                              const std::string &name);
 
     /// \return A full expression (incorporating a macro call from
-    /// getClampMacroCall) call that forces the given address to point to a safe
+    /// getClampFunctionCall) call that forces the given address to point to a safe
     /// memory area.
-    std::string getClampMacroExpression(clang::Expr *access, unsigned size, AddressSpaceLimits &limits);
+    std::string getClampFunctionExpression(clang::Expr *access, unsigned size, AddressSpaceLimits &limits);
 
     /// \brief Writes bytestream generated from general.cl to stream.
     void emitGeneralCode(std::ostream &out);
   
-    /// \brief Goes through the set of all generated _WCL_ADDR_* calls
-    /// and writes corresponding _WCL_ADDR_* #defines to the stream.
-    void emitLimitMacros(std::ostream &out);
+    /// \brief Goes through the set of all generated _wcl_addr_* calls
+    /// and writes corresponding _wcl_addr_* functions to the stream.
+    void emitLimitFunctions(std::ostream &out);
   
     /// \return Macro definitions for checking and clamping addresses in given
     /// address space with given limit count.
@@ -395,7 +402,7 @@ private:
     /// #define _WCL_ADDR_CHECK_local_2(type, addr, min1, max1, min2, max2) (<macro code>)
     /// #define _WCL_ADDR_CLAMP_local_2(type, addr, min1, max1, min2, max2, asnull) (<macro code>)
     /// the clamping macro is defined in terms of the checking macro
-    std::string getWclAddrCheckMacroDefinition(unsigned addrSpaceNum, unsigned limitCount);
+    std::string getWclAddrCheckFunctionDefinition(ClampFunctionKey clamp);
 
     /// Write generated code at the beginning of module.
     void emitPrologue(std::ostream &out);
